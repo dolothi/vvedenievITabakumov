@@ -1,92 +1,148 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Страница авторизации</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f0f2f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-        .login-card {
-            background-color: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 350px;
-        }
-        .login-card h2 {
-            text-align: center;
-            margin-bottom: 20px;
-            color: #333;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            color: #666;
-        }
-        .form-group input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            box-sizing: border-box;
-        }
-        button {
-            width: 100%;
-            padding: 10px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        .switch-link {
-            text-align: center;
-            margin-top: 15px;
-            font-size: 14px;
-        }
-        .switch-link a {
-            color: #007bff;
-            text-decoration: none;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Вход</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f7f7f8;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #202123;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e5e5e5;
+      border-radius: 12px;
+      padding: 40px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .sub {
+      font-size: 14px;
+      color: #6e6e80;
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: #353740;
+    }
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #d9d9e3;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      outline: none;
+      transition: border 0.15s;
+      background: #fff;
+    }
+    input:focus { border-color: #10a37f; }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #10a37f;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-top: 4px;
+    }
+    button:hover { background: #0e8f6f; }
+    .link {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 13px;
+      color: #6e6e80;
+    }
+    .link a { color: #10a37f; text-decoration: none; }
+    .link a:hover { text-decoration: underline; }
+    .msg {
+      margin-top: 14px;
+      font-size: 13px;
+      text-align: center;
+      min-height: 18px;
+    }
+    .msg.err { color: #d93025; }
+    .msg.ok { color: #10a37f; }
+  </style>
 </head>
 <body>
+  <div class="card">
+    <h1>Вход</h1>
+    <p class="sub">Войдите в свой аккаунт</p>
 
-    <div class="login-card">
-        <h2>Вход в систему</h2>
-        <form action="#" method="post" id="form-login">
-            <div class="form-group">
-                <label for="username">Логин или Email</label>
-                <input type="text" id="username" name="username" placeholder="Введите логин" required>
-            </div>
-            <div class="form-group">
-                <label for="password">Пароль</label>
-                <input type="password" id="password" name="password" placeholder="Введите пароль" required>
-            </div>
-            <button type="submit">Войти</button>
-        </form>
-        <div class="switch-link">
-            <a href="/">Зарегистрироваться</a>
-        </div>
+    <form id="loginForm">
+      <label for="email">Email</label>
+      <input type="email" id="email" required autocomplete="email">
+
+      <label for="password">Пароль</label>
+      <input type="password" id="password" required autocomplete="current-password">
+
+      <button type="submit">Войти</button>
+      <div class="msg" id="msg"></div>
+    </form>
+
+    <div class="link">
+      Нет аккаунта? <a href="/">Зарегистрироваться</a>
     </div>
+  </div>
 
+  <script>
+    const form = document.getElementById('loginForm');
+    const msg = document.getElementById('msg');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.textContent = '';
+      msg.className = 'msg';
+
+      const data = {
+        email: document.getElementById('email').value.trim(),
+        password: document.getElementById('password').value
+      };
+
+      try {
+        const res = await fetch('/user_login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const json = await res.json();
+
+        if (res.ok && json.success) {
+          msg.textContent = 'Успешно! Перенаправляем…';
+          msg.className = 'msg ok';
+          setTimeout(() => window.location = '/dashboard', 600);
+        } else {
+          msg.textContent = json.error || 'Неверный email или пароль';
+          msg.className = 'msg err';
+        }
+      } catch (err) {
+        msg.textContent = 'Ошибка сети';
+        msg.className = 'msg err';
+      }
+    });
+  </script>
 </body>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.js"></script>
-<script src="{{ url_for('static', filename='script.js') }}"></script>
 </html>

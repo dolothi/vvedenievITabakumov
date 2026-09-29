@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Личный кабинет</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f7f7f8;
+      color: #202123;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ===== HEADER ===== */
+    header {
+      background: #fff;
+      border-bottom: 1px solid #e5e5e5;
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    header .logo { font-weight: 600; font-size: 15px; }
+    header .right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 14px;
+      color: #6e6e80;
+    }
+    header .balance-badge {
+      background: #e8f5f0;
+      color: #0e8f6f;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    header a.logout {
+      color: #6e6e80;
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      transition: background 0.15s;
+    }
+    header a.logout:hover { background: #f0f0f0; color: #202123; }
+
+    /* ===== MAIN / CHAT ===== */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 780px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 0 16px;
+      min-height: 0;
+    }
+
+    /* Greeting when empty */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .empty-state .avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #10a37f 0%, #0e8f6f 100%);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+    .empty-state h1 {
+      font-size: 26px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .empty-state p {
+      font-size: 14px;
+      color: #6e6e80;
+      max-width: 400px;
+    }
+
+    /* Messages */
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 0 16px;
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .messages.active { display: flex; }
+
+    .msg {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .msg .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .msg.user .avatar {
+      background: #e8f5f0;
+      color: #0e8f6f;
+    }
+    .msg.bot .avatar {
+      background: linear-gradient(135deg, #10a37f 0%, #0e8f6f 100%);
+      color: #fff;
+    }
+    .msg .bubble {
+      background: #fff;
+      border: 1px solid #e5e5e5;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 100%;
+      word-wrap: break-word;
+    }
+    .msg.user .bubble {
+      background: #f7f7f8;
+      border-color: #ececf1;
+    }
+    .msg .media-preview {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .msg .media-preview img,
+    .msg .media-preview video {
+      max-width: 240px;
+      max-height: 180px;
+      border-radius: 8px;
+      display: block;
+    }
+
+    /* Input area */
+    .input-area {
+      flex-shrink: 0;
+      padding: 12px 0 20px;
+    }
+    .input-wrap {
+      background: #fff;
+      border: 1px solid #d9d9e3;
+      border-radius: 16px;
+      padding: 8px 8px 8px 16px;
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+      transition: border 0.15s;
+    }
+    .input-wrap:focus-within { border-color: #10a37f; }
+
+    .input-wrap textarea {
+      flex: 1;
+      border: none;
+      outline: none;
+      resize: none;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 10px 0;
+      max-height: 200px;
+      background: transparent;
+      color: #202123;
+    }
+    .input-wrap textarea::placeholder { color: #8e8ea0; }
+
+    .icon-btn {
+      width: 36px;
+      height: 36px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6e6e80;
+      transition: background 0.15s, color 0.15s;
+      flex-shrink: 0;
+    }
+    .icon-btn:hover { background: #f0f0f0; color: #202123; }
+
+    .send-btn {
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 8px;
+      background: #10a37f;
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, opacity 0.15s;
+      flex-shrink: 0;
+    }
+    .send-btn:hover { background: #0e8f6f; }
+    .send-btn:disabled {
+      background: #d9d9e3;
+      cursor: not-allowed;
+    }
+
+    .attach-preview {
+      display: none;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 8px 4px 4px;
+    }
+    .attach-preview.active { display: flex; }
+    .attach-item {
+      position: relative;
+      width: 64px;
+      height: 64px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #e5e5e5;
+    }
+    .attach-item img,
+    .attach-item video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .attach-item .remove {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hint {
+      text-align: center;
+      font-size: 12px;
+      color: #8e8ea0;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">Личный кабинет</div>
+    <div class="right">
+      <span class="balance-badge">{{ user.balance }} кредитов</span>
+      <a href="/logout" class="logout">Выйти</a>
+    </div>
+  </header>
+
+  <main>
+    <!-- Пустое состояние -->
+    <div class="empty-state" id="emptyState">
+      <div class="avatar">{{ user.username[0]|upper }}</div>
+      <h1>Привет, {{ user.username }}!</h1>
+      <p>Задайте вопрос или отправьте изображение — я помогу.</p>
+    </div>
+
+    <!-- Список сообщений -->
+    <div class="messages" id="messages"></div>
+
+    <!-- Ввод -->
+    <div class="input-area">
+      <div class="attach-preview" id="attachPreview"></div>
+      <div class="input-wrap">
+        <button class="icon-btn" id="attachBtn" title="Прикрепить файл">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+          </svg>
+        </button>
+        <input type="file" id="fileInput" accept="image/*,video/*" multiple hidden>
+        <textarea id="textarea" rows="1" placeholder="Напишите сообщение..."></textarea>
+        <button class="send-btn" id="sendBtn" disabled title="Отправить">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="19" x2="12" y2="5"/>
+            <polyline points="5 12 12 5 19 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="hint">Нажмите Enter — отправить, Shift+Enter — новая строка</div>
+    </div>
+  </main>
+
+  <script>
+    const messagesEl = document.getElementById('messages');
+    const emptyState = document.getElementById('emptyState');
+    const textarea = document.getElementById('textarea');
+    const sendBtn = document.getElementById('sendBtn');
+    const attachBtn = document.getElementById('attachBtn');
+    const fileInput = document.getElementById('fileInput');
+    const attachPreview = document.getElementById('attachPreview');
+
+    let attachments = []; // { file, url, type }
+
+    // ---------- Авто-высота textarea ----------
+    textarea.addEventListener('input', () => {
+      textarea.style.height = 'auto';
+      textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+      sendBtn.disabled = !textarea.value.trim() && attachments.length === 0;
+    });
+
+    // ---------- Enter — отправка ----------
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (!sendBtn.disabled) sendMessage();
+      }
+    });
+
+    // ---------- Прикрепление файлов ----------
+    attachBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', () => {
+      for (const file of fileInput.files) {
+        const url = URL.createObjectURL(file);
+        const type = file.type.startsWith('video') ? 'video' : 'image';
+        attachments.push({ file, url, type });
+      }
+      fileInput.value = '';
+      renderAttachments();
+      sendBtn.disabled = !textarea.value.trim() && attachments.length === 0;
+    });
+
+    function renderAttachments() {
+      attachPreview.innerHTML = '';
+      if (attachments.length === 0) {
+        attachPreview.classList.remove('active');
+        return;
+      }
+      attachPreview.classList.add('active');
+      attachments.forEach((att, idx) => {
+        const item = document.createElement('div');
+        item.className = 'attach-item';
+        item.innerHTML = att.type === 'video'
+          ? `<video src="${att.url}" muted></video>`
+          : `<img src="${att.url}" alt="">`;
+        const rm = document.createElement('button');
+        rm.className = 'remove';
+        rm.textContent = '×';
+        rm.onclick = () => {
+          attachments.splice(idx, 1);
+          renderAttachments();
+          sendBtn.disabled = !textarea.value.trim() && attachments.length === 0;
+        };
+        item.appendChild(rm);
+        attachPreview.appendChild(item);
+      });
+    }
+
+    // ---------- Отправка сообщения ----------
+    async function sendMessage() {
+      const text = textarea.value.trim();
+      if (!text && attachments.length === 0) return;
+
+      // Скрыть пустое состояние
+      emptyState.style.display = 'none';
+      messagesEl.classList.add('active');
+
+      // --- Сообщение пользователя ---
+      const userMsg = { role: 'user', text, attachments: [...attachments] };
+      renderMessage(userMsg);
+
+      // Очистить поле
+      textarea.value = '';
+      textarea.style.height = 'auto';
+      attachments = [];
+      renderAttachments();
+      sendBtn.disabled = true;
+
+      // --- Ответ бота (эхо, заменишь на реальный API) ---
+      const botMsg = document.createElement('div');
+      botMsg.className = 'msg bot';
+      botMsg.innerHTML = `
+        <div class="avatar">AI</div>
+        <div class="bubble">Печатает<span class="dots">...</span></div>
+      `;
+      messagesEl.appendChild(botMsg);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      // Имитация задержки + эхо
+      setTimeout(() => {
+        const bubble = botMsg.querySelector('.bubble');
+        if (text) {
+          bubble.textContent = 'Вы написали: «' + text + '». Это демо-ответ. Подключите реальный API.';
+        } else {
+          bubble.textContent = 'Вы отправили файл(ы). Это демо-ответ.';
+        }
+      }, 600);
+    }
+
+    function renderMessage({ role, text, attachments }) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + role;
+      const avatarText = role === 'user' ? '{{ user.username[0]|upper }}' : 'AI';
+      let html = `<div class="avatar">${avatarText}</div><div class="bubble">`;
+      if (text) html += escapeHtml(text).replace(/\n/g, '<br>');
+      if (attachments && attachments.length) {
+        html += '<div class="media-preview">';
+        attachments.forEach(att => {
+          if (att.type === 'video') {
+            html += `<video src="${att.url}" controls></video>`;
+          } else {
+            html += `<img src="${att.url}" alt="">`;
+          }
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+      div.innerHTML = html;
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+  </script>
+</body>
+</html>
