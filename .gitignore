@@ -1,0 +1,22 @@
+# Виртуальное окружение
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# Секреты и базы
+.env
+*.db
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
