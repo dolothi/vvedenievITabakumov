@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  {% include '_head.html' %}
+  <title>Игры</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='game.css') }}">
+</head>
+<body>
+  <header>
+    <div class="logo">Игры</div>
+    <div class="right">
+      <a href="/dashboard" class="btn btn-ghost">Чат</a>
+    </div>
+  </header>
+
+  <main class="games">
+    <h1 class="display">Во что играем?</h1>
+    <div class="game-cards">
+      <a class="game-card" href="/game">
+        <img src="{{ url_for('static', filename='game/face_up.png') }}" alt="">
+        <h2>Flappy Sasha</h2>
+      </a>
+      <a class="game-card" href="/dino">
+        <img src="{{ url_for('static', filename='game/face_normal.png') }}" alt="">
+        <h2>Sasha Run</h2>
+      </a>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,89 @@
+/* Hungry Tiger — общие токены и базовые элементы.
+   Salmond/Graphikx недоступны, поэтому: Oswald (заголовки) и Inter (мелкий текст).
+   Оба шрифта подключаются в <head> каждой страницы. */
+:root {
+  --color-tiger-gold: #faae33;
+  --color-ember-rust: #823513;
+  --color-saffron-glow: #9f531b;
+  --color-dark-spice: #402011;
+  --color-charred-clove: #281006;
+  --color-cardamom-brown: #6b2e12;
+  --color-chili-red: #d1255c;
+
+  --font-display: 'Oswald', 'Arial Narrow', Impact, sans-serif;
+  --font-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --radius-card: 6px;
+  --radius-pill: 9999px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.4;
+  background: var(--color-ember-rust);
+  color: var(--color-tiger-gold);
+}
+
+/* Заголовки — плакатный размер, плотный интерлиньяж */
+.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  color: var(--color-tiger-gold);
+  overflow-wrap: anywhere;
+}
+.eyebrow {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-tiger-gold);
+}
+
+/* Кнопки */
+.btn {
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-tiger-gold);
+  padding: 8px 17px;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+}
+.btn-ghost { background: transparent; color: var(--color-tiger-gold); }
+.btn-ghost:hover { background: var(--color-tiger-gold); color: var(--color-charred-clove); }
+.btn-filled { background: var(--color-tiger-gold); color: var(--color-charred-clove); padding: 10px 20px; }
+.btn-filled:hover { opacity: 0.88; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Поля ввода */
+.field {
+  width: 100%;
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--color-tiger-gold);
+  background: transparent;
+  border: 1px solid var(--color-cardamom-brown);
+  border-radius: var(--radius-pill);
+  padding: 13px 20px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.field::placeholder { color: var(--color-tiger-gold); opacity: 0.6; }
+.field:focus { border-color: var(--color-tiger-gold); }
+
+/* Пунктирный разделитель */
+.dotted { border: 0; border-top: 1px dotted var(--color-tiger-gold); }
+
+/* Полосы прокрутки в тон */
+* { scrollbar-width: thin; scrollbar-color: var(--color-cardamom-brown) transparent; }

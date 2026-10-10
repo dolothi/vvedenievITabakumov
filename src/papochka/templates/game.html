@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  {% include '_head.html' %}
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <title>Flappy Sasha</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='game.css') }}">
+</head>
+<body>
+  <header>
+    <div class="logo">Flappy Sasha</div>
+    <div class="right">
+      <button class="btn btn-ghost" id="muteBtn">Звук: вкл</button>
+      <a href="/games" class="btn btn-ghost">Игры</a>
+      <a href="/dashboard" class="btn btn-ghost">Чат</a>
+    </div>
+  </header>
+
+  <main>
+    <canvas id="game" width="216" height="384"></canvas>
+    <div class="hint">Пробел, ↑ или тап — взмах</div>
+  </main>
+
+  <script src="{{ url_for('static', filename='game.js') }}"></script>
+</body>
+</html>
