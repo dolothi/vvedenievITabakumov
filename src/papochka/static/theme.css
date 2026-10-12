@@ -1,89 +1,210 @@
-/* Hungry Tiger — общие токены и базовые элементы.
-   Salmond/Graphikx недоступны, поэтому: Oswald (заголовки) и Inter (мелкий текст).
-   Оба шрифта подключаются в <head> каждой страницы. */
+/* Общие токены и базовые элементы: фиолетовый фон, крупный песочный заголовок,
+   мягкие скругления и спокойные цвета. */
 :root {
-  --color-tiger-gold: #faae33;
-  --color-ember-rust: #823513;
-  --color-saffron-glow: #9f531b;
-  --color-dark-spice: #402011;
-  --color-charred-clove: #281006;
-  --color-cardamom-brown: #6b2e12;
-  --color-chili-red: #d1255c;
+  --violet: #61609a;      /* фон страницы */
+  --dusk: #8584bd;
+  --butter: #f9cc73;      /* заголовки и акцент */
+  --pink: #f8c1ba;
+  --matcha: #b5c995;
+  --lavender: #dcdaf2;
+  --bone: #f9f5f2;
+  --ink: #1a1a1a;
+  --glass: rgba(249, 245, 242, 0.12);        /* полупрозрачные кнопки и панели */
+  --glass-hover: rgba(249, 245, 242, 0.2);
 
-  --font-display: 'Oswald', 'Arial Narrow', Impact, sans-serif;
-  --font-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-
-  --radius-card: 6px;
-  --radius-pill: 9999px;
+  --font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Unbounded', var(--font);
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius: 14px;
+  --pill: 100px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: var(--font-ui);
-  font-weight: 500;
-  font-size: 14px;
-  line-height: 1.4;
-  background: var(--color-ember-rust);
-  color: var(--color-tiger-gold);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  background: var(--violet);
+  color: var(--bone);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Заголовки — плакатный размер, плотный интерлиньяж */
-.display {
+/* Огромный заголовок-плакат в две строки */
+.hero {
+  --lh: 0.95;
   font-family: var(--font-display);
-  font-weight: 700;
-  text-transform: uppercase;
-  line-height: 0.9;
-  letter-spacing: -0.02em;
-  color: var(--color-tiger-gold);
-  overflow-wrap: anywhere;
-}
-.eyebrow {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--color-tiger-gold);
-}
-
-/* Кнопки */
-.btn {
-  font-family: var(--font-ui);
-  font-weight: 500;
-  font-size: 13px;
+  font-weight: 900;
+  font-size: min(11vw, 170px);
+  line-height: var(--lh);
   letter-spacing: 0.01em;
   text-transform: uppercase;
+  text-align: center;
+  color: var(--butter);
+  overflow-wrap: anywhere;
+}
+.hero > span { display: block; }
+
+/* Кнопки-пилюли */
+.btn {
+  font-family: var(--font);
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1;
   text-decoration: none;
   cursor: pointer;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--color-tiger-gold);
-  padding: 8px 17px;
-  transition: background 0.15s, color 0.15s, opacity 0.15s;
+  border-radius: var(--pill);
+  padding: 10px 16px;
+  border: none;
+  background: var(--bone);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+  transition: background 0.15s, transform 0.15s;
 }
-.btn-ghost { background: transparent; color: var(--color-tiger-gold); }
-.btn-ghost:hover { background: var(--color-tiger-gold); color: var(--color-charred-clove); }
-.btn-filled { background: var(--color-tiger-gold); color: var(--color-charred-clove); padding: 10px 20px; }
-.btn-filled:hover { opacity: 0.88; }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn:hover { background: #fff; }
+.btn:active { transform: scale(0.98); }
+.btn-accent { background: var(--butter); }
+.btn-accent:hover { background: #fbd68b; }
+.btn-ghost { background: var(--glass); color: var(--bone); }
+.btn-ghost:hover { background: var(--glass-hover); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
 /* Поля ввода */
 .field {
   width: 100%;
-  font-family: var(--font-ui);
-  font-weight: 500;
-  font-size: 13px;
-  color: var(--color-tiger-gold);
-  background: transparent;
-  border: 1px solid var(--color-cardamom-brown);
-  border-radius: var(--radius-pill);
-  padding: 13px 20px;
+  font-family: var(--font);
+  font-size: 16px;
+  color: var(--ink);
+  background: var(--bone);
+  border: none;
+  border-radius: var(--radius);
+  padding: 12px 16px;
   outline: none;
-  transition: border-color 0.15s;
+  box-shadow: 0 0 0 0 rgba(249, 204, 115, 0);
+  transition: box-shadow 0.15s;
 }
-.field::placeholder { color: var(--color-tiger-gold); opacity: 0.6; }
-.field:focus { border-color: var(--color-tiger-gold); }
+.field::placeholder { color: #9a97a8; }
+.field:focus { box-shadow: 0 0 0 3px rgba(249, 204, 115, 0.6); }
 
-/* Пунктирный разделитель */
-.dotted { border: 0; border-top: 1px dotted var(--color-tiger-gold); }
+/* Шапка: прозрачная, на фиолетовом фоне */
+.topbar {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+}
+.topbar .logo {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 17px;
+  text-transform: uppercase;
+  color: var(--butter);
+  white-space: nowrap;
+}
+.topbar .left, .topbar .right { display: flex; align-items: center; gap: 8px; }
 
-/* Полосы прокрутки в тон */
-* { scrollbar-width: thin; scrollbar-color: var(--color-cardamom-brown) transparent; }
+/* Кнопка-иконка (тонкие скруглённые иконки, как в ChatGPT) */
+.icon-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.icon-btn:hover { background: var(--glass); }
+.icon-btn svg { width: 20px; height: 20px; }
+
+* { scrollbar-width: thin; scrollbar-color: rgba(249, 245, 242, 0.25) transparent; }
+
+/* ===== Вход и регистрация (body.auth) ===== */
+.auth {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 9vh 16px 48px;
+}
+.auth .page { width: 100%; display: flex; flex-direction: column; align-items: center; }
+.auth .hero { margin-bottom: 44px; }
+.auth form { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 6px; }
+.auth .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.auth .row > div { display: flex; flex-direction: column; gap: 6px; }
+.auth label { font-size: 13px; font-weight: 500; margin: 8px 0 0 4px; opacity: 0.9; }
+.auth form .btn { margin-top: 22px; width: 100%; padding: 14px 22px; font-size: 15px; }
+.auth .msg { margin-top: 12px; min-height: 20px; text-align: center; font-size: 14px; }
+.auth .msg.err { color: var(--bone); background: rgba(201, 66, 69, 0.85); border-radius: var(--radius); padding: 8px 14px; }
+.auth .msg.ok { color: var(--butter); }
+.auth .link { margin-top: 18px; text-align: center; font-size: 14px; opacity: 0.9; }
+.auth .link a { color: var(--bone); text-underline-offset: 3px; }
+.auth .link a:hover { color: var(--butter); }
+
+/* ===== Игры (body.play) ===== */
+.play { height: 100vh; display: flex; flex-direction: column; }
+.play main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px;
+}
+.play canvas {
+  max-width: 100%;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(35, 30, 80, 0.2);
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+  touch-action: none;
+  cursor: pointer;
+}
+#game { height: min(calc(100vh - 150px), 820px); aspect-ratio: 9 / 16; background: #4ec0ca; }
+#dino { width: min(100%, 1200px); aspect-ratio: 4 / 1; background: #f7f7f7; }
+.play .hint { flex-shrink: 0; font-size: 14px; opacity: 0.8; text-align: center; }
+
+.play .games { justify-content: flex-start; padding-top: 6vh; }
+.games .hero { margin-bottom: 48px; }
+.game-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 24px;
+  width: 100%;
+  max-width: 640px;
+}
+.game-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: var(--pink);
+  border-radius: 20px;
+  padding: 20px;
+  color: var(--ink);
+  text-decoration: none;
+  transition: transform 0.15s;
+}
+.game-card + .game-card { background: var(--matcha); }
+.game-card:hover { transform: translateY(-3px) rotate(-1deg); }
+.game-card h2 { font-weight: 600; font-size: 22px; letter-spacing: -0.02em; line-height: 1.15; }
+/* Голова из общей картинки faces.png (38px высотой, увеличена до 64px) */
+.face {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  background: url('faces.png') 0 0 / auto 64px no-repeat;
+  image-rendering: pixelated;
+}
+.face.up { width: 62px; background-position: -64px 0; }

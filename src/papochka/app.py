@@ -1,12 +1,18 @@
+import base64
 import hashlib
 import hmac
+import json
 import os
 import re
 import sqlite3
+import uuid
 from functools import wraps
 
 from dotenv import load_dotenv
-from flask import Flask, g, jsonify, redirect, render_template, request, session, url_for
+from flask import (
+    Flask, Response, abort, g, jsonify, redirect, render_template, request,
+    send_from_directory, session, stream_with_context, url_for,
+)
 
 load_dotenv()
 
@@ -27,24 +33,41 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MIN_PASSWORD_LEN = 6
 
 # ---------- ИИ (Tokenator, API в формате Anthropic) ----------
-# Ключ берётся из личного кабинета Tokenator и кладётся в .env как AI_API_KEY.
-AI_API_KEY = env("AI_API_KEY")
-AI_BASE_URL = env("AI_BASE_URL", "https://api.tokenator.cloud/anthropic")
-# Можно указать несколько моделей через запятую: если первая перегружена
-# или недоступна, чат автоматически пробует следующую.
-AI_MODELS = [
-    m.strip()
-    # Порядок подобран по scripts/check_models.py: самые быстрые рабочие модели Tokenator
-    for m in env("AI_MODEL", "deepseek-v4.1-flash,gemini-3.7-flash,gpt-4o-mini").split(",")
-    if m.strip()
-]
-AI_MAX_TOKENS = int(env("AI_MAX_TOKENS", 1024))
-AI_SYSTEM_PROMPT = env(
-    "AI_SYSTEM_PROMPT",
-    "Ты дружелюбный ИИ-помощник. Отвечай по-русски, кратко и по делу.",
-)
-HISTORY_LIMIT = 20  # сколько последних сообщений отправляем модели
+AI_API_KEY = env("AI_API_KEY")  # ключ из кабинета Tokenator, кладётся в .env
+AI_BASE_URL = "https://api.tokenator.cloud/anthropic"
+# Роль ИИ задаётся в prompt.txt рядом с этим файлом; читается при каждом сообщении,
+# поэтому правки работают без перезапуска сервера.
+PROMPT_FILE = os.path.join(os.path.dirname(__file__), "prompt.txt")
+AI_MAX_TOKENS = 1024
+HISTORY_LIMIT = 20   # сколько последних сообщений отправляем модели
+HISTORY_IMAGES = 3   # картинки показываем модели только в последних N сообщениях
 MAX_MESSAGE_LEN = 4000
+
+# Модели Tokenator, проверенные на ответы и чтение картинок. Первая — по умолчанию.
+MODELS = [
+    ("deepseek-v4.1-flash", "DeepSeek V4.1 Flash · быстрая"),
+    ("gemini-3.8-flash", "Gemini 3.8 Flash"),
+    ("gpt-4o-mini", "GPT-4o mini"),
+    ("claude-haiku-4-5", "Claude Haiku 4.5"),
+    ("qwen-3.7-plus", "Qwen 3.7 Plus"),
+    ("grok-4.5", "Grok 4.5"),
+    ("claude-sonnet-4-6", "Claude Sonnet 4.6 · умная"),
+]
+MODEL_IDS = [m for m, _ in MODELS]
+
+# Картинки в чате: сохраняем в instance/uploads, формат определяем по первым байтам
+UPLOAD_DIR = os.path.join(app.instance_path, "uploads")
+MAX_IMAGES = 3
+MAX_IMAGE_BYTES = 4 * 1024 * 1024
+IMAGE_TYPES = {  # начало файла -> (расширение, media type)
+    b"\xff\xd8\xff": ("jpg", "image/jpeg"),
+    b"\x89PNG": ("png", "image/png"),
+    b"GIF8": ("gif", "image/gif"),
+    b"RIFF": ("webp", "image/webp"),
+}
+IMAGE_NAME_RE = re.compile(r"^[0-9a-f]{32}\.(jpg|png|gif|webp)$")
+DATA_URL_RE = re.compile(r"^data:image/[a-z+]+;base64,(.+)$", re.S)
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 
 
 def hash_password(password):
@@ -77,6 +100,7 @@ CREATE TABLE IF NOT EXISTS messages (
     chat_id INTEGER NOT NULL,
     role TEXT NOT NULL,
     content TEXT NOT NULL,
+    images TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 """
@@ -94,6 +118,7 @@ MYSQL_CHAT_SCHEMA = [
         chat_id INT NOT NULL,
         role VARCHAR(16) NOT NULL,
         content TEXT NOT NULL,
+        images TEXT,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) CHARACTER SET utf8mb4""",
 ]
@@ -127,6 +152,9 @@ def get_db():
                 cur = g.db.cursor()
                 for stmt in MYSQL_CHAT_SCHEMA:
                     cur.execute(stmt)
+                cur.execute("SHOW COLUMNS FROM messages LIKE 'images'")
+                if not cur.fetchall():  # база создана до появления картинок
+                    cur.execute("ALTER TABLE messages ADD COLUMN images TEXT")
                 g.db.commit()
                 _mysql_schema_ready = True
         else:
@@ -134,6 +162,8 @@ def get_db():
             g.db = sqlite3.connect(SQLITE_PATH)
             g.db.row_factory = sqlite3.Row
             g.db.executescript(SQLITE_SCHEMA)
+            if "images" not in [r[1] for r in g.db.execute("PRAGMA table_info(messages)")]:
+                g.db.execute("ALTER TABLE messages ADD COLUMN images TEXT")  # база до картинок
     return g.db
 
 
@@ -285,49 +315,143 @@ def own_chat(chat_id):
     )
 
 
-def ask_ai(history):
-    """history: [{'role': 'user'|'assistant', 'content': str}, ...] -> текст ответа."""
+def save_images(data_urls):
+    """Принимает data-URL картинок, сохраняет файлы, возвращает список имён."""
+    names = []
+    for url in data_urls[:MAX_IMAGES]:
+        match = DATA_URL_RE.match(str(url))
+        try:
+            raw = base64.b64decode(match.group(1), validate=True) if match else b""
+        except ValueError:
+            raw = b""
+        kind = next((v for k, v in IMAGE_TYPES.items() if raw.startswith(k)), None)
+        if not kind or len(raw) > MAX_IMAGE_BYTES:
+            raise ValueError("Можно прикреплять картинки (jpg, png, webp, gif) до 4 МБ")
+        name = "%s.%s" % (uuid.uuid4().hex, kind[0])
+        os.makedirs(UPLOAD_DIR, exist_ok=True)
+        with open(os.path.join(UPLOAD_DIR, name), "wb") as f:
+            f.write(raw)
+        names.append(name)
+    return names
+
+
+def to_ai_messages(rows):
+    """Строки из БД -> сообщения для API (с картинками в последних HISTORY_IMAGES)."""
+    result, image_budget = [], HISTORY_IMAGES
+    for row in reversed(rows):
+        blocks = []
+        names = row["images"].split(",") if row["images"] else []
+        if names and image_budget > 0:
+            image_budget -= 1
+            for name in names:
+                try:
+                    with open(os.path.join(UPLOAD_DIR, name), "rb") as f:
+                        raw = f.read()
+                except OSError:
+                    continue  # файл удалён — просто пропускаем
+                media = next(v[1] for k, v in IMAGE_TYPES.items() if raw.startswith(k))
+                blocks.append({"type": "image", "source": {
+                    "type": "base64", "media_type": media,
+                    "data": base64.b64encode(raw).decode()}})
+        blocks.append({"type": "text", "text": row["content"] or "Что на этом изображении?"})
+        result.append({"role": row["role"], "content": blocks})
+    result.reverse()
+    while result and result[0]["role"] != "user":  # диалог должен начинаться с пользователя
+        result.pop(0)
+    return result
+
+
+def system_prompt():
+    try:
+        with open(PROMPT_FILE, encoding="utf-8") as f:
+            return f.read().strip() or None
+    except OSError:
+        return None
+
+
+def stream_ai(messages, model):
+    """Отдаёт ответ кусками по мере печати. Если модель недоступна ещё до первого
+    куска — пробует соседние из списка."""
     if not AI_API_KEY:
-        return (
-            "ИИ пока не подключён: в файле .env не задан AI_API_KEY. "
-            "Вы написали: «%s»." % history[-1]["content"]
-        )
+        yield "ИИ пока не подключён: в файле .env не задан AI_API_KEY."
+        return
 
     import anthropic
 
-    # Tokenator принимает ключ как Bearer-токен (ANTHROPIC_AUTH_TOKEN в его инструкции)
+    # Tokenator принимает ключ как Bearer-токен
     client = anthropic.Anthropic(
-        api_key=None, auth_token=AI_API_KEY, base_url=AI_BASE_URL,
-        timeout=30, max_retries=1,
+        api_key=None, auth_token=AI_API_KEY, base_url=AI_BASE_URL, timeout=30, max_retries=1
     )
-    # Диалог для модели должен начинаться с сообщения пользователя
-    while history and history[0]["role"] != "user":
-        history = history[1:]
-
+    prompt = system_prompt()
+    extra = {"system": prompt} if prompt else {}
+    chain = [model] + [m for m in MODEL_IDS if m != model][:2]
     last_error = None
-    for model in AI_MODELS:
+    for name in chain:
+        started = False
         try:
-            resp = client.messages.create(
-                model=model,
-                max_tokens=AI_MAX_TOKENS,
-                system=AI_SYSTEM_PROMPT,
-                messages=history,
-            )
+            with client.messages.stream(
+                model=name, max_tokens=AI_MAX_TOKENS, messages=messages, **extra
+            ) as stream:
+                for piece in stream.text_stream:
+                    if piece:
+                        started = True
+                        yield piece
         except (anthropic.AuthenticationError, anthropic.PermissionDeniedError):
             raise  # неверный ключ — другие модели не помогут
-        except anthropic.APIStatusError as exc:
-            # Перегрузка, лимит, модель не найдена и т.п. — пробуем следующую
-            app.logger.warning("Модель %s недоступна (%s), пробую следующую", model, exc.status_code)
+        except anthropic.APIError as exc:  # перегрузка, лимит, обрыв связи
+            if started:
+                raise  # половина ответа уже ушла — другой моделью не продолжить
+            app.logger.warning("Модель %s недоступна (%s)", name, exc)
             last_error = exc
             continue
-        text = "".join(b.text for b in resp.content if b.type == "text").strip()
-        if text:
-            return text
-        # Некоторые модели иногда возвращают пустой текст — пробуем следующую
-        app.logger.warning("Модель %s вернула пустой ответ, пробую следующую", model)
+        if started:
+            return
+        app.logger.warning("Модель %s вернула пустой ответ", name)
     if last_error:
         raise last_error
-    return "Не получилось получить ответ, попробуйте ещё раз."
+    yield "Не получилось получить ответ, попробуйте ещё раз."
+
+
+def pick_model(req):
+    return req.get("model") if req.get("model") in MODEL_IDS else MODEL_IDS[0]
+
+
+def reply_stream(chat_id, title, model):
+    """Потоковый ответ ИИ в формате NDJSON: {"delta": ...} по кускам,
+    в конце {"done": true, "title": ...} или {"error": ...}."""
+    rows = run(
+        "SELECT role, content, images FROM `messages` WHERE `chat_id` = %s "
+        "ORDER BY `id` DESC LIMIT %s",
+        (chat_id, HISTORY_LIMIT),
+        many=True,
+    )
+    messages = to_ai_messages(rows)
+
+    def line(obj):
+        return json.dumps(obj, ensure_ascii=False) + "\n"
+
+    def generate():
+        parts = []
+        try:
+            for piece in stream_ai(messages, model):
+                parts.append(piece)
+                yield line({"delta": piece})
+        except Exception:
+            app.logger.exception("Ошибка запроса к ИИ")
+            yield line({"error": "ИИ сейчас недоступен, попробуйте ещё раз"})
+            return
+        run(
+            "INSERT INTO `messages`(`chat_id`, `role`, `content`) VALUES (%s, 'assistant', %s)",
+            (chat_id, "".join(parts).strip()),
+            commit=True,
+        )
+        yield line({"done": True, "title": title})
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.route("/api/chats", methods=["GET"])
@@ -358,10 +482,12 @@ def api_chat_messages(chat_id):
     if not own_chat(chat_id):
         return json_error("Чат не найден", 404)
     messages = run(
-        "SELECT role, content FROM `messages` WHERE `chat_id` = %s ORDER BY `id`",
+        "SELECT role, content, images FROM `messages` WHERE `chat_id` = %s ORDER BY `id`",
         (chat_id,),
         many=True,
     )
+    for m in messages:
+        m["images"] = m["images"].split(",") if m["images"] else []
     return jsonify({"success": True, "messages": messages})
 
 
@@ -370,8 +496,19 @@ def api_chat_messages(chat_id):
 def api_chat_delete(chat_id):
     if not own_chat(chat_id):
         return json_error("Чат не найден", 404)
+    rows = run(
+        "SELECT images FROM `messages` WHERE `chat_id` = %s AND `images` IS NOT NULL",
+        (chat_id,),
+        many=True,
+    )
     run("DELETE FROM `messages` WHERE `chat_id` = %s", (chat_id,))
     run("DELETE FROM `chats` WHERE `id` = %s", (chat_id,), commit=True)
+    for row in rows:
+        for name in row["images"].split(","):
+            try:
+                os.remove(os.path.join(UPLOAD_DIR, name))
+            except OSError:
+                pass
     return jsonify({"success": True})
 
 
@@ -382,40 +519,72 @@ def api_chat_send(chat_id):
     if not chat:
         return json_error("Чат не найден", 404)
 
-    text = str((request.get_json(silent=True) or {}).get("text", "")).strip()
-    if not text:
+    req = request.get_json(silent=True) or {}
+    text = str(req.get("text", "")).strip()
+    try:
+        images = save_images(req.get("images") or [])
+    except ValueError as exc:
+        return json_error(str(exc), 400)
+    if not text and not images:
         return json_error("Пустое сообщение", 400)
     if len(text) > MAX_MESSAGE_LEN:
         return json_error("Сообщение слишком длинное (максимум %d символов)" % MAX_MESSAGE_LEN, 400)
 
     run(
-        "INSERT INTO `messages`(`chat_id`, `role`, `content`) VALUES (%s, 'user', %s)",
-        (chat_id, text),
+        "INSERT INTO `messages`(`chat_id`, `role`, `content`, `images`) VALUES (%s, 'user', %s, %s)",
+        (chat_id, text, ",".join(images) or None),
     )
     if chat["title"] == "Новый чат":
-        chat["title"] = text[:40]
+        chat["title"] = text[:40] or "Изображение"
         run("UPDATE `chats` SET `title` = %s WHERE `id` = %s", (chat["title"], chat_id))
     get_db().commit()  # фиксируем сообщение до обращения к ИИ
+    return reply_stream(chat_id, chat["title"], pick_model(req))
 
-    rows = run(
-        "SELECT role, content FROM `messages` WHERE `chat_id` = %s ORDER BY `id` DESC LIMIT %s",
-        (chat_id, HISTORY_LIMIT),
-        many=True,
+
+@app.route("/api/chats/<int:chat_id>/regenerate", methods=["POST"])
+@api_login_required
+def api_chat_regenerate(chat_id):
+    """«Переспросить»: убираем последний ответ ИИ и спрашиваем заново (можно другой моделью)."""
+    chat = own_chat(chat_id)
+    if not chat:
+        return json_error("Чат не найден", 404)
+    last = run(
+        "SELECT id, role FROM `messages` WHERE `chat_id` = %s ORDER BY `id` DESC LIMIT 1",
+        (chat_id,),
+        one=True,
     )
-    history = list(reversed(rows))
+    if not last:
+        return json_error("В чате пока нет сообщений", 400)
+    if last["role"] == "assistant":
+        run("DELETE FROM `messages` WHERE `id` = %s", (last["id"],), commit=True)
+    return reply_stream(chat_id, chat["title"], pick_model(request.get_json(silent=True) or {}))
 
-    try:
-        reply = ask_ai(history)
-    except Exception:
-        app.logger.exception("Ошибка запроса к ИИ")
-        return json_error("ИИ сейчас недоступен, попробуйте ещё раз", 502)
 
-    run(
-        "INSERT INTO `messages`(`chat_id`, `role`, `content`) VALUES (%s, 'assistant', %s)",
-        (chat_id, reply),
-        commit=True,
+@app.route("/api/chats/<int:chat_id>", methods=["PATCH"])
+@api_login_required
+def api_chat_rename(chat_id):
+    if not own_chat(chat_id):
+        return json_error("Чат не найден", 404)
+    title = str((request.get_json(silent=True) or {}).get("title", "")).strip()[:60]
+    if not title:
+        return json_error("Название не может быть пустым", 400)
+    run("UPDATE `chats` SET `title` = %s WHERE `id` = %s", (title, chat_id), commit=True)
+    return jsonify({"success": True, "title": title})
+
+
+@app.route("/uploads/<name>")
+@login_required
+def upload(name):
+    """Отдаёт картинку, только если она из чата текущего пользователя."""
+    owner = IMAGE_NAME_RE.match(name) and run(
+        "SELECT 1 AS ok FROM `messages` m JOIN `chats` c ON c.id = m.chat_id "
+        "WHERE c.user_id = %s AND m.images LIKE %s",
+        (fetch_user(session["user_email"])["id"], "%" + name + "%"),
+        one=True,
     )
-    return jsonify({"success": True, "reply": reply, "title": chat["title"]})
+    if not owner:
+        abort(404)
+    return send_from_directory(UPLOAD_DIR, name)
 
 
 # ========== СТРАНИЦЫ ==========
@@ -436,7 +605,7 @@ def dashboard():
     if not user:
         session.clear()
         return redirect(url_for("login"))
-    return render_template("dashboard.html", user=user)
+    return render_template("dashboard.html", user=user, models=MODELS)
 
 
 @app.route("/games")
@@ -445,16 +614,20 @@ def games():
     return render_template("games.html")
 
 
+# Обе игры открываются одним шаблоном game.html
+GAMES = {
+    "/game": {"title": "Flappy Sasha", "canvas": "game", "size": (216, 384),
+              "hint": "Пробел, ↑ или тап — взмах", "script": "game.js"},
+    "/dino": {"title": "Sasha Run", "canvas": "dino", "size": (600, 150),
+              "hint": "Пробел, ↑ или тап — прыжок · ↓ — пригнуться", "script": "dino.js"},
+}
+
+
 @app.route("/game")
-@login_required
-def game():
-    return render_template("game.html")
-
-
 @app.route("/dino")
 @login_required
-def dino():
-    return render_template("dino.html")
+def game():
+    return render_template("game.html", **GAMES[request.path])
 
 
 @app.route("/logout")

@@ -3,31 +3,23 @@
 <head>
   {% include '_head.html' %}
   <title>Вход</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='auth.css') }}">
 </head>
-<body>
+<body class="auth">
   <div class="page">
-    <div class="eyebrow">Личный кабинет</div>
-    <h1 class="display">Вход</h1>
+    <h1 class="hero"><span>Снова</span><span>привет!</span></h1>
 
-    <div class="card">
-      <p class="sub">Войдите в свой аккаунт</p>
+    <form id="loginForm">
+      <label for="email">Email</label>
+      <input class="field" type="email" id="email" placeholder="example@mail.ru" required autocomplete="email">
 
-      <form id="loginForm">
-        <label for="email">Email</label>
-        <input class="field" type="email" id="email" placeholder="example@mail.ru" required autocomplete="email">
+      <label for="password">Пароль</label>
+      <input class="field" type="password" id="password" required autocomplete="current-password">
 
-        <label for="password">Пароль</label>
-        <input class="field" type="password" id="password" required autocomplete="current-password">
+      <button type="submit" class="btn btn-accent">Войти</button>
+      <div class="msg"></div>
+    </form>
 
-        <button type="submit" class="btn btn-filled">Войти</button>
-        <div class="msg"></div>
-      </form>
-
-      <div class="link">
-        Нет аккаунта? <a href="/">Зарегистрироваться</a>
-      </div>
-    </div>
+    <div class="link">Нет аккаунта? <a href="/">Зарегистрироваться</a></div>
   </div>
 
   <script src="{{ url_for('static', filename='auth.js') }}"></script>

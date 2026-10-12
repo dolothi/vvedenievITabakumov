@@ -3,38 +3,34 @@
 <head>
   {% include '_head.html' %}
   <title>Регистрация</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='auth.css') }}">
 </head>
-<body>
+<body class="auth">
   <div class="page">
-    <div class="eyebrow">Создайте новый аккаунт</div>
-    <h1 class="display">Регистра&shy;ция</h1>
+    <h1 class="hero"><span>Ты тут</span><span>впервые?</span></h1>
 
-    <div class="card">
-      <form id="registerForm">
-        <label for="fullname">Ваше имя</label>
-        <input class="field" type="text" id="fullname" placeholder="Иван" required autocomplete="given-name">
-
-        <label for="surname">Ваша фамилия</label>
-        <input class="field" type="text" id="surname" placeholder="Иванов" required autocomplete="family-name">
-
-        <label for="email">Email</label>
-        <input class="field" type="email" id="email" placeholder="example@mail.ru" required autocomplete="email">
-
-        <label for="password">Пароль</label>
-        <input class="field" type="password" id="password" placeholder="Минимум 6 символов" required autocomplete="new-password">
-
-        <label for="confirm_password">Повторите пароль</label>
-        <input class="field" type="password" id="confirm_password" placeholder="Повторите пароль" required autocomplete="new-password">
-
-        <button type="submit" class="btn btn-filled">Зарегистрироваться</button>
-        <div class="msg"></div>
-      </form>
-
-      <div class="link">
-        Уже есть аккаунт? <a href="/login">Войти</a>
+    <form id="registerForm">
+      <div class="row">
+        <div><label for="fullname">Имя</label>
+        <input class="field" type="text" id="fullname" placeholder="Иван" required autocomplete="given-name"></div>
+        <div><label for="surname">Фамилия</label>
+        <input class="field" type="text" id="surname" placeholder="Иванов" required autocomplete="family-name"></div>
       </div>
-    </div>
+
+      <label for="email">Email</label>
+      <input class="field" type="email" id="email" placeholder="example@mail.ru" required autocomplete="email">
+
+      <div class="row">
+        <div><label for="password">Пароль</label>
+        <input class="field" type="password" id="password" placeholder="От 6 символов" required autocomplete="new-password"></div>
+        <div><label for="confirm_password">Ещё раз</label>
+        <input class="field" type="password" id="confirm_password" placeholder="Повторите" required autocomplete="new-password"></div>
+      </div>
+
+      <button type="submit" class="btn btn-accent">Создать аккаунт</button>
+      <div class="msg"></div>
+    </form>
+
+    <div class="link">Уже есть аккаунт? <a href="/login">Войти</a></div>
   </div>
 
   <script src="{{ url_for('static', filename='auth.js') }}"></script>

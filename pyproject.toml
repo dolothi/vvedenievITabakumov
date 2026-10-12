@@ -1,7 +1,7 @@
 [project]
 name = "papochka"
 version = "0.1.0"
-description = "Add your description here"
+description = "Школьный проект: чат с ИИ и мини-игры на Flask"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
@@ -9,7 +9,6 @@ dependencies = [
     "flask>=3.0.3",
     "mysql-connector-python>=9.0.0",
     "python-dotenv>=1.0.1",
-    "werkzeug>=3.0.6",
 ]
 
 [project.scripts]

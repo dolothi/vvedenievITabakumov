@@ -33,18 +33,6 @@ const CAP_H = 12;
 const BIRD_X = 62;
 const HIT_R = 12;
 
-// ---------- Спрайты головы ----------
-function loadImg(src) {
-  const img = new Image();
-  img.src = src;
-  return img;
-}
-const FACES = {
-  normal: loadImg('/static/game/face_normal.png'),
-  up: loadImg('/static/game/face_up.png'),
-  down: loadImg('/static/game/face_down.png'),
-};
-
 // ---------- Пиксельные крылья (3 кадра) ----------
 const WING_FRAMES = [
   [ // вверх
@@ -88,15 +76,6 @@ const WING_FRAMES = [
   ],
 ];
 const WING_COLORS = { o: C.outline, w: '#ffffff', s: '#d9d9d9' };
-
-function makeCanvas(w, h) {
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const cx = c.getContext('2d');
-  cx.imageSmoothingEnabled = false;
-  return [c, cx];
-}
 
 const wingSprites = WING_FRAMES.map((rows) => {
   const [c, cx] = makeCanvas(rows[0].length, rows.length);
@@ -208,52 +187,16 @@ function drawPipeCap(x, y) {
   ctx.fillRect(cx, y + CAP_H - 1, cw, 1);
 }
 
-// ---------- Звук (генерируется на лету, без файлов) ----------
-let audio = null;
-let muted = false;
-try { muted = localStorage.getItem('flappyMuted') === '1'; } catch (e) { /* ignore */ }
-
-function tone(freq, start, dur, type, vol, endFreq) {
-  const o = audio.createOscillator();
-  const g = audio.createGain();
-  o.type = type;
-  o.frequency.setValueAtTime(freq, start);
-  if (endFreq) o.frequency.exponentialRampToValueAtTime(endFreq, start + dur);
-  g.gain.setValueAtTime(vol, start);
-  g.gain.exponentialRampToValueAtTime(0.001, start + dur);
-  o.connect(g);
-  g.connect(audio.destination);
-  o.start(start);
-  o.stop(start + dur);
-}
-
-function sound(name) {
-  if (muted) return;
-  const AC = window.AudioContext || window.webkitAudioContext;
-  if (!AC) return;
-  audio = audio || new AC();
-  const t = audio.currentTime;
-  if (name === 'flap') tone(480, t, 0.09, 'square', 0.05, 900);
-  if (name === 'score') {
+// ---------- Звук ----------
+const sound = createSound('flappyMuted', {
+  flap: (tone, t) => tone(480, t, 0.09, 'square', 0.05, 900),
+  score: (tone, t) => {
     tone(880, t, 0.08, 'triangle', 0.12);
     tone(1320, t + 0.08, 0.14, 'triangle', 0.12);
-  }
-  if (name === 'hit') tone(220, t, 0.25, 'sawtooth', 0.12, 50);
-  if (name === 'die') tone(500, t + 0.15, 0.4, 'square', 0.05, 90);
-}
-
-const muteBtn = document.getElementById('muteBtn');
-function updateMuteBtn() {
-  if (muteBtn) muteBtn.textContent = muted ? 'Звук: выкл' : 'Звук: вкл';
-}
-if (muteBtn) {
-  muteBtn.addEventListener('click', () => {
-    muted = !muted;
-    try { localStorage.setItem('flappyMuted', muted ? '1' : '0'); } catch (e) { /* ignore */ }
-    updateMuteBtn();
-  });
-}
-updateMuteBtn();
+  },
+  hit: (tone, t) => tone(220, t, 0.25, 'sawtooth', 0.12, 50),
+  die: (tone, t) => tone(500, t + 0.15, 0.4, 'square', 0.05, 90),
+});
 
 // ---------- Состояние ----------
 let state = 'ready';          // ready | playing | dying | over
@@ -262,7 +205,6 @@ let scroll = 0;               // общий сдвиг мира для пара�
 let flapTimer = 0;            // сколько ещё показывать «взмах»
 let wingTime = 0;
 let flash = 0, shake = 0, overTime = 0;
-let last = performance.now();
 
 try { best = parseInt(localStorage.getItem('flappyBest'), 10) || 0; } catch (e) { best = 0; }
 
@@ -438,7 +380,7 @@ function drawBird() {
   ctx.save();
   ctx.translate(BIRD_X, Math.round(bird.y));
   ctx.rotate(bird.angle);
-  if (face.complete && face.naturalWidth) {
+  if (FACES.ready) {
     ctx.drawImage(face, -Math.floor(face.width / 2), -Math.floor(face.height / 2) - 2);
   } else {
     blob(ctx, 0, 0, HIT_R, '#f5c66b');
@@ -556,17 +498,6 @@ function draw() {
   }
 }
 
-// ---------- Цикл ----------
-function frame(now) {
-  // Время первого кадра может быть чуть раньше запуска скрипта — не даём dt уйти в минус.
-  // Сверху ограничиваем, чтобы не было скачков после сворачивания вкладки.
-  const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
-  last = now;
-  update(dt);
-  draw();
-  requestAnimationFrame(frame);
-}
-
 // ---------- Управление ----------
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Space' || e.code === 'ArrowUp') {
@@ -579,6 +510,5 @@ canvas.addEventListener('pointerdown', (e) => {
   flap();
 });
 
-if (document.fonts && document.fonts.load) document.fonts.load('8px "Press Start 2P"');
 reset();
-requestAnimationFrame(frame);
+startLoop(update, draw);

@@ -3,24 +3,24 @@
 <head>
   {% include '_head.html' %}
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <title>Flappy Sasha</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='game.css') }}">
+  <title>{{ title }}</title>
 </head>
-<body>
-  <header>
-    <div class="logo">Flappy Sasha</div>
+<body class="play">
+  <header class="topbar">
+    <div class="logo">{{ title }}</div>
     <div class="right">
       <button class="btn btn-ghost" id="muteBtn">Звук: вкл</button>
       <a href="/games" class="btn btn-ghost">Игры</a>
-      <a href="/dashboard" class="btn btn-ghost">Чат</a>
+      <a href="/dashboard" class="btn">Чат</a>
     </div>
   </header>
 
   <main>
-    <canvas id="game" width="216" height="384"></canvas>
-    <div class="hint">Пробел, ↑ или тап — взмах</div>
+    <canvas id="{{ canvas }}" width="{{ size[0] }}" height="{{ size[1] }}"></canvas>
+    <div class="hint">{{ hint }}</div>
   </main>
 
-  <script src="{{ url_for('static', filename='game.js') }}"></script>
+  <script src="{{ url_for('static', filename='game-common.js') }}"></script>
+  <script src="{{ url_for('static', filename=script) }}"></script>
 </body>
 </html>

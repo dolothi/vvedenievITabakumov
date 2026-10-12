@@ -9,7 +9,6 @@ ctx.imageSmoothingEnabled = false;
 const C = {
   bg: '#f7f7f7',
   ink: '#535353',
-  light: '#c9c9c9',
   cloud: '#e4e4e4',
 };
 
@@ -26,26 +25,6 @@ const MAX_SPEED = 780;
 const ACCEL = 10;             // прибавка скорости в секунду
 
 // ---------- Спрайты ----------
-function loadImg(src) {
-  const img = new Image();
-  img.src = src;
-  return img;
-}
-const FACES = {
-  normal: loadImg('/static/game/face_normal.png'),
-  up: loadImg('/static/game/face_up.png'),
-  down: loadImg('/static/game/face_down.png'),
-};
-
-function makeCanvas(w, h) {
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const cx = c.getContext('2d');
-  cx.imageSmoothingEnabled = false;
-  return [c, cx];
-}
-
 function spriteFrom(rows, color) {
   const [c, cx] = makeCanvas(rows[0].length, rows.length);
   cx.fillStyle = color;
@@ -92,51 +71,14 @@ const CLOUD = spriteFrom([
 ], C.cloud);
 
 // ---------- Звук ----------
-let audio = null;
-let muted = false;
-try { muted = localStorage.getItem('dinoMuted') === '1'; } catch (e) { /* ignore */ }
-
-function tone(freq, start, dur, type, vol, endFreq) {
-  const o = audio.createOscillator();
-  const g = audio.createGain();
-  o.type = type;
-  o.frequency.setValueAtTime(freq, start);
-  if (endFreq) o.frequency.exponentialRampToValueAtTime(endFreq, start + dur);
-  g.gain.setValueAtTime(vol, start);
-  g.gain.exponentialRampToValueAtTime(0.001, start + dur);
-  o.connect(g);
-  g.connect(audio.destination);
-  o.start(start);
-  o.stop(start + dur);
-}
-
-function sound(name) {
-  if (muted) return;
-  const AC = window.AudioContext || window.webkitAudioContext;
-  if (!AC) return;
-  audio = audio || new AC();
-  const t = audio.currentTime;
-  if (name === 'jump') tone(600, t, 0.08, 'square', 0.05, 1000);
-  if (name === 'point') {
+const sound = createSound('dinoMuted', {
+  jump: (tone, t) => tone(600, t, 0.08, 'square', 0.05, 1000),
+  point: (tone, t) => {
     tone(990, t, 0.07, 'square', 0.05);
     tone(1320, t + 0.08, 0.12, 'square', 0.05);
-  }
-  if (name === 'die') tone(300, t, 0.3, 'sawtooth', 0.1, 60);
-}
-
-const muteBtn = document.getElementById('muteBtn');
-function updateMuteBtn() {
-  if (muteBtn) muteBtn.textContent = muted ? 'Звук: выкл' : 'Звук: вкл';
-}
-if (muteBtn) {
-  muteBtn.addEventListener('click', () => {
-    muted = !muted;
-    try { localStorage.setItem('dinoMuted', muted ? '1' : '0'); } catch (e) { /* ignore */ }
-    updateMuteBtn();
-    muteBtn.blur(); // чтобы пробел не нажимал кнопку повторно
-  });
-}
-updateMuteBtn();
+  },
+  die: (tone, t) => tone(300, t, 0.3, 'sawtooth', 0.1, 60),
+});
 
 // ---------- Земля и облака ----------
 const PEBBLES = [];
@@ -150,7 +92,6 @@ let runner, obstacles, clouds, speed, distance, score, hiScore, nextGap;
 let ducking = false;
 let legTime = 0, overTime = 0, blinkTime = 0;
 let groundOffset = 0;
-let last = performance.now();
 
 try { hiScore = parseInt(localStorage.getItem('dinoBest'), 10) || 0; } catch (e) { hiScore = 0; }
 
@@ -317,27 +258,23 @@ function drawLegs(baseY, frame) {
   ctx.fillRect(right, baseY - lift[1] - 2, 5, 2);
 }
 
-function faceReady(img) {
-  return img.complete && img.naturalWidth;
-}
-
 function drawRunner() {
   const baseY = GROUND_Y + Math.round(runner.y);
 
   if (state === 'over') {
-    if (faceReady(FACES.down)) ctx.drawImage(FACES.down, RUN_X, baseY - LEG_H - HEAD);
+    if (FACES.ready) ctx.drawImage(FACES.down, RUN_X, baseY - LEG_H - HEAD);
     drawLegs(baseY, 0);
     return;
   }
 
   if (ducking && onGround()) {
     // Пригнулся: голову сплющивает — смешно и ниже птиц
-    if (faceReady(FACES.down)) ctx.drawImage(FACES.down, RUN_X, GROUND_Y - 26, HEAD + 6, 26);
+    if (FACES.ready) ctx.drawImage(FACES.down, RUN_X, GROUND_Y - 26, HEAD + 6, 26);
     return;
   }
 
   const face = !onGround() ? FACES.up : FACES.normal;
-  if (faceReady(face)) ctx.drawImage(face, RUN_X, baseY - LEG_H - HEAD);
+  if (FACES.ready) ctx.drawImage(face, RUN_X, baseY - LEG_H - HEAD);
   const frame = (state === 'playing' && onGround()) ? Math.floor(legTime * 12) % 2 : 0;
   drawLegs(baseY, frame);
 }
@@ -376,16 +313,6 @@ function draw() {
   }
 }
 
-// ---------- Цикл ----------
-function frame(now) {
-  // Время первого кадра может быть раньше запуска скрипта — dt не уходит в минус
-  const dt = Math.max(0, Math.min((now - last) / 1000, 0.05));
-  last = now;
-  update(dt);
-  draw();
-  requestAnimationFrame(frame);
-}
-
 // ---------- Управление ----------
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Space' || e.code === 'ArrowUp') {
@@ -404,6 +331,5 @@ canvas.addEventListener('pointerdown', (e) => {
   jump();
 });
 
-if (document.fonts && document.fonts.load) document.fonts.load('10px "Press Start 2P"');
 reset();
-requestAnimationFrame(frame);
+startLoop(update, draw);
