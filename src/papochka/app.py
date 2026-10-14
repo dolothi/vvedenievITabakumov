@@ -38,20 +38,23 @@ AI_BASE_URL = "https://api.tokenator.cloud/anthropic"
 # Роль ИИ задаётся в prompt.txt рядом с этим файлом; читается при каждом сообщении,
 # поэтому правки работают без перезапуска сервера.
 PROMPT_FILE = os.path.join(os.path.dirname(__file__), "prompt.txt")
-AI_MAX_TOKENS = 1024
+AI_MAX_TOKENS = 2048
 HISTORY_LIMIT = 20   # сколько последних сообщений отправляем модели
 HISTORY_IMAGES = 3   # картинки показываем модели только в последних N сообщениях
 MAX_MESSAGE_LEN = 4000
 
 # Модели Tokenator, проверенные на ответы и чтение картинок. Первая — по умолчанию.
+# Сначала быстрые, дальше тяжелее и умнее (они и токенов тратят больше).
 MODELS = [
     ("deepseek-v4.1-flash", "DeepSeek V4.1 Flash · быстрая"),
-    ("gemini-3.8-flash", "Gemini 3.8 Flash"),
-    ("gpt-4o-mini", "GPT-4o mini"),
-    ("claude-haiku-4-5", "Claude Haiku 4.5"),
-    ("qwen-3.7-plus", "Qwen 3.7 Plus"),
-    ("grok-4.5", "Grok 4.5"),
-    ("claude-sonnet-4-6", "Claude Sonnet 4.6 · умная"),
+    ("gemini-3.8-flash", "Gemini 3.8 Flash · быстрая"),
+    ("gpt-6.1-sol", "GPT-6.1 Sol"),
+    ("claude-sonnet-5.5", "Claude Sonnet 5.5"),
+    ("grok-4.7", "Grok 4.7"),
+    ("kimi-k2.8-preview", "Kimi K2.8"),
+    ("qwen-3-8-max", "Qwen 3.8 Max"),
+    ("claude-fable-5.1", "Claude Fable 5.1"),
+    ("claude-opus-5.5", "Claude Opus 5.5 · самая умная"),
 ]
 MODEL_IDS = [m for m, _ in MODELS]
 
@@ -336,9 +339,10 @@ def save_images(data_urls):
 
 
 def to_ai_messages(rows):
-    """Строки из БД -> сообщения для API (с картинками в последних HISTORY_IMAGES)."""
+    """Строки из БД (от новых к старым) -> сообщения для API в порядке диалога.
+    Картинки отправляем только из последних HISTORY_IMAGES сообщений."""
     result, image_budget = [], HISTORY_IMAGES
-    for row in reversed(rows):
+    for row in rows:  # от новых к старым — бюджет картинок достаётся последним
         blocks = []
         names = row["images"].split(",") if row["images"] else []
         if names and image_budget > 0:
@@ -355,10 +359,17 @@ def to_ai_messages(rows):
                     "data": base64.b64encode(raw).decode()}})
         blocks.append({"type": "text", "text": row["content"] or "Что на этом изображении?"})
         result.append({"role": row["role"], "content": blocks})
-    result.reverse()
+    result.reverse()  # теперь от старых к новым, как шёл разговор
     while result and result[0]["role"] != "user":  # диалог должен начинаться с пользователя
         result.pop(0)
-    return result
+    # Два сообщения одной роли подряд (например, ответ ИИ не дошёл) склеиваем в одно
+    merged = []
+    for msg in result:
+        if merged and merged[-1]["role"] == msg["role"]:
+            merged[-1]["content"] += msg["content"]
+        else:
+            merged.append(msg)
+    return merged
 
 
 def system_prompt():

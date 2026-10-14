@@ -32,6 +32,10 @@ const PIPE_SPACING = 125;
 const CAP_H = 12;
 const BIRD_X = 62;
 const HIT_R = 12;
+const REST_AT = 50;           // после 50-й трубы — платформа для отдыха
+const FINISH_AT = 100;        // после 100-й — финиш
+const LEDGE_W = 120;
+const LEDGE_Y = 196;          // верх платформы
 
 // ---------- Пиксельные крылья (3 кадра) ----------
 const WING_FRAMES = [
@@ -196,11 +200,21 @@ const sound = createSound('flappyMuted', {
   },
   hit: (tone, t) => tone(220, t, 0.25, 'sawtooth', 0.12, 50),
   die: (tone, t) => tone(500, t + 0.15, 0.4, 'square', 0.05, 90),
+  land: (tone, t) => tone(180, t, 0.08, 'triangle', 0.1, 120),
+  win: (tone, t) => {
+    [523, 659, 784, 1047].forEach((f, i) => tone(f, t + i * 0.12, 0.18, 'square', 0.06));
+    tone(1047, t + 0.5, 0.5, 'triangle', 0.1);
+  },
 });
 
 // ---------- Состояние ----------
-let state = 'ready';          // ready | playing | dying | over
+let state = 'ready';          // ready | playing | dying | over | win
 let bird, pipes, particles, score, best, isNewBest;
+let ledge, goal, spawned;     // платформа отдыха, финиш, сколько труб уже выпущено
+let restDone = false;         // платформа уже была
+let resting = false;          // стоит на платформе — мир на паузе
+let winBurst = 0;
+const confetti = createConfetti(W, H);
 let scroll = 0;               // общий сдвиг мира для параллакса
 let flapTimer = 0;            // сколько ещё показывать «взмах»
 let wingTime = 0;
@@ -212,6 +226,11 @@ function reset() {
   bird = { y: GROUND_Y / 2 - 10, vy: 0, angle: 0 };
   pipes = [];
   particles = [];
+  ledge = null;
+  goal = null;
+  spawned = 0;
+  restDone = false;
+  resting = false;
   score = 0;
   isNewBest = false;
   state = 'ready';
@@ -220,6 +239,7 @@ function reset() {
 function flap() {
   if (state === 'ready') state = 'playing';
   if (state === 'playing') {
+    resting = false;
     bird.vy = FLAP_SPEED;
     flapTimer = 0.18;
     wingTime = 0;
@@ -231,7 +251,7 @@ function flap() {
         life: 0.5,
       });
     }
-  } else if (state === 'over' && overTime > 0.6) {
+  } else if ((state === 'over' && overTime > 0.6) || (state === 'win' && overTime > 1)) {
     reset();
   }
 }
@@ -246,6 +266,18 @@ function crash(hitGround) {
     state = 'dying';
     bird.vy = Math.max(bird.vy, 0);
     sound('die');
+  }
+}
+
+function win() {
+  state = 'win';
+  overTime = 0;
+  winBurst = 0;
+  sound('win');
+  if (score > best) {
+    best = score;
+    isNewBest = true;
+    try { localStorage.setItem('flappyBest', String(best)); } catch (e) { /* ignore */ }
   }
 }
 
@@ -265,6 +297,26 @@ function spawnPipe() {
   const minY = margin + PIPE_GAP / 2;
   const maxY = GROUND_Y - margin - PIPE_GAP / 2;
   pipes.push({ x: W + 10, gapY: Math.round(minY + Math.random() * (maxY - minY)), passed: false });
+}
+
+// Следующее препятствие: обычно труба, но после REST_AT труб — платформа, после FINISH_AT — финиш
+function spawnNext() {
+  if (spawned === REST_AT && !restDone) {
+    ledge = { x: W + 10 };
+    restDone = true;
+    return;
+  }
+  if (spawned === FINISH_AT) goal = { x: W + 10 };
+  else spawnPipe();
+  spawned++;
+}
+
+function lastObstacleX() {
+  let x = -Infinity;
+  if (pipes.length) x = pipes[pipes.length - 1].x;
+  if (ledge) x = Math.max(x, ledge.x + LEDGE_W - PIPE_W);
+  if (goal) x = Math.max(x, goal.x);
+  return x;
 }
 
 function hitsPipe(p) {
@@ -290,8 +342,23 @@ function update(dt) {
     pt.life -= dt;
   }
   particles = particles.filter((pt) => pt.life > 0);
+  confetti.update(dt);
 
-  if (state === 'ready' || state === 'playing') scroll += PIPE_SPEED * dt;
+  if (state === 'ready' || (state === 'playing' && !resting)) scroll += PIPE_SPEED * dt;
+
+  if (state === 'win') {
+    // Салют из конфетти, голова довольно парит на месте
+    overTime += dt;
+    winBurst -= dt;
+    if (winBurst <= 0) {
+      confetti.burst(overTime < 0.1 ? 160 : 50);
+      winBurst = 1.4;
+    }
+    bird.vy = 0;
+    bird.angle = 0;
+    bird.y += (GROUND_Y / 2 - 10 + Math.sin(performance.now() / 220) * 4 - bird.y) * Math.min(1, dt * 3);
+    return;
+  }
 
   if (state === 'ready') {
     bird.y = GROUND_Y / 2 - 10 + Math.sin(performance.now() / 220) * 4;
@@ -304,18 +371,25 @@ function update(dt) {
     return;
   }
 
-  // playing и dying: гравитация
-  bird.vy += GRAVITY * dt;
-  bird.y += bird.vy * dt;
-  if (bird.vy < 0) bird.angle = -0.35;
-  else bird.angle = Math.min(1.35, bird.angle + dt * (bird.vy > 180 ? 4 : 0.8));
+  // playing и dying: гравитация (на платформе — стоим)
+  if (resting) {
+    bird.vy = 0;
+    bird.y = LEDGE_Y - HIT_R;
+    bird.angle = 0;
+  } else {
+    bird.vy += GRAVITY * dt;
+    bird.y += bird.vy * dt;
+    if (bird.vy < 0) bird.angle = -0.35;
+    else bird.angle = Math.min(1.35, bird.angle + dt * (bird.vy > 180 ? 4 : 0.8));
+  }
 
   if (bird.y - HIT_R < -20) { bird.y = HIT_R - 20; bird.vy = 0; }
 
   if (state === 'playing') {
-    if (!pipes.length || pipes[pipes.length - 1].x < W - PIPE_SPACING) spawnPipe();
+    const move = resting ? 0 : PIPE_SPEED * dt;
+    if (spawned <= FINISH_AT && lastObstacleX() < W - PIPE_SPACING) spawnNext();
     for (const p of pipes) {
-      p.x -= PIPE_SPEED * dt;
+      p.x -= move;
       if (!p.passed && p.x + PIPE_W < BIRD_X - HIT_R) {
         p.passed = true;
         score++;
@@ -324,6 +398,27 @@ function update(dt) {
     }
     pipes = pipes.filter((p) => p.x + PIPE_W + 6 > 0);
     if (pipes.some(hitsPipe)) crash(false);
+
+    // Платформа: на неё можно приземлиться сверху и стоять, пока не взмахнёшь
+    if (ledge) {
+      ledge.x -= move;
+      const over = BIRD_X + 6 > ledge.x && BIRD_X - 6 < ledge.x + LEDGE_W;
+      const wasAbove = bird.y + HIT_R - bird.vy * dt <= LEDGE_Y + 2;
+      if (!resting && over && bird.vy >= 0 && bird.y + HIT_R >= LEDGE_Y && wasAbove) {
+        resting = true;
+        bird.y = LEDGE_Y - HIT_R;
+        bird.vy = 0;
+        bird.angle = 0;
+        sound('land');
+      }
+      if (ledge.x + LEDGE_W < -10) ledge = null;
+    }
+
+    // Финиш: пересёк клетчатую ленту — победа
+    if (goal) {
+      goal.x -= move;
+      if (goal.x + 6 <= BIRD_X) { win(); return; }
+    }
   }
 
   if (bird.y + HIT_R >= GROUND_Y) {
@@ -360,6 +455,7 @@ function drawGround() {
 }
 
 function currentFace() {
+  if (state === 'win') return FACES.up;
   if (state === 'dying' || state === 'over') return FACES.down;
   if (flapTimer > 0) return FACES.up;
   if (bird.vy > 230) return FACES.down;
@@ -369,7 +465,7 @@ function currentFace() {
 function currentWing() {
   if (state === 'dying' || state === 'over') return wingSprites[1];
   // После взмаха крылья машут быстро, потом медленнее
-  const fps = state === 'ready' ? 8 : (flapTimer > 0 ? 24 : 10);
+  const fps = resting ? 3 : state === 'ready' ? 8 : (flapTimer > 0 ? 24 : 10);
   const seq = [0, 1, 2, 1];
   const i = Math.floor(Math.max(0, wingTime) * fps) % seq.length;
   return wingSprites[seq[i]];
@@ -449,6 +545,35 @@ function drawPanel() {
   }
 }
 
+// Парящая платформа с травой и табличкой «ОТДЫХ»
+function drawLedge(l) {
+  const x = Math.round(l.x), y = LEDGE_Y;
+  ctx.fillStyle = C.outline;
+  ctx.fillRect(x - 1, y - 1, LEDGE_W + 2, 15);
+  ctx.fillStyle = C.grassLight;
+  ctx.fillRect(x, y, LEDGE_W, 3);
+  ctx.fillStyle = C.grass;
+  ctx.fillRect(x, y + 3, LEDGE_W, 2);
+  ctx.fillStyle = C.sand;
+  ctx.fillRect(x, y + 5, LEDGE_W, 8);
+  ctx.fillStyle = C.sandDark;
+  for (let i = 4; i < LEDGE_W - 4; i += 10) ctx.fillRect(x + i, y + 8, 4, 1);
+  pixelText('ОТДЫХ', x + LEDGE_W - 30, y - 22, 8, '#fff6d5');   // правее — голова встаёт у левого края
+}
+
+// Финиш: клетчатая лента во всю высоту и красный баннер сверху
+function drawGoal(g) {
+  const x = Math.round(g.x);
+  ctx.fillStyle = C.outline;
+  ctx.fillRect(x - 1, 0, 14, GROUND_Y);
+  drawChecker(ctx, x, 0, 12, GROUND_Y, 6);
+  ctx.fillStyle = C.outline;
+  ctx.fillRect(x - 34, 30, 80, 20);
+  ctx.fillStyle = '#e8303c';
+  ctx.fillRect(x - 33, 31, 78, 18);
+  pixelText('ФИНИШ', x + 6, 36, 8, C.white);
+}
+
 function draw() {
   ctx.save();
   if (shake > 0) ctx.translate(Math.round((Math.random() - 0.5) * 4), Math.round((Math.random() - 0.5) * 4));
@@ -468,6 +593,8 @@ function draw() {
     drawPipeCap(x, bottom);
     drawPipeBody(x, bottom + CAP_H, GROUND_Y);
   }
+  if (ledge) drawLedge(ledge);
+  if (goal) drawGoal(goal);
 
   drawGround();
 
@@ -479,6 +606,11 @@ function draw() {
 
   if (state === 'playing' || state === 'dying') {
     pixelText(String(score), W / 2, 28, 24);
+    if (resting) pixelText('ПРОБЕЛ — ЛЕТИМ ДАЛЬШЕ', W / 2, 62, 8);
+  } else if (state === 'win') {
+    pixelText('ФИНИШ!', W / 2, 96, 24, '#f8d84a');
+    drawPanel();
+    if (overTime > 1 && Math.floor(overTime * 2) % 2 === 0) pixelText('ТАП — ЕЩЁ РАЗ', W / 2, 262, 8);
   } else if (state === 'ready') {
     pixelText('FLAPPY', W / 2, 52, 24, '#f8d84a');
     pixelText('SASHA', W / 2, 82, 24, '#f8d84a');
@@ -491,6 +623,8 @@ function draw() {
       pixelText('ТАП — ЕЩЁ РАЗ', W / 2, 262, 8);
     }
   }
+
+  confetti.draw(ctx);
 
   if (flash > 0) {
     ctx.fillStyle = 'rgba(255, 255, 255, ' + flash.toFixed(2) + ')';

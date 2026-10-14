@@ -80,3 +80,48 @@ function startLoop(update, draw) {
   }
   requestAnimationFrame(frame);
 }
+
+// Клетчатая финишная лента: чёрно-белые клетки размером cell
+function drawChecker(cx, x, y, w, h, cell) {
+  for (let j = 0; j * cell < h; j++) {
+    for (let i = 0; i * cell < w; i++) {
+      cx.fillStyle = (i + j) % 2 ? '#1a1a1a' : '#ffffff';
+      cx.fillRect(Math.round(x + i * cell), Math.round(y + j * cell),
+        Math.min(cell, w - i * cell), Math.min(cell, h - j * cell));
+    }
+  }
+}
+
+// Конфетти на финише: разноцветные бумажки падают сверху и кружатся
+const CONFETTI_COLORS = ['#e8303c', '#f7d23c', '#3cb4e8', '#5fcf58', '#e86bd0', '#ffffff', '#fca048'];
+function createConfetti(w, h) {
+  let bits = [];
+  return {
+    burst(n) {
+      for (let i = 0; i < n; i++) {
+        bits.push({
+          x: Math.random() * w, y: -4 - Math.random() * h * 0.6,
+          vx: (Math.random() - 0.5) * 60, vy: 30 + Math.random() * 60,
+          size: 2 + Math.floor(Math.random() * 3), phase: Math.random() * 6,
+          color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+        });
+      }
+    },
+    update(dt) {
+      for (const b of bits) {
+        b.phase += dt * 8;
+        b.x += (b.vx + Math.sin(b.phase) * 20) * dt;
+        b.y += b.vy * dt;
+      }
+      bits = bits.filter((b) => b.y < h + 6);
+    },
+    draw(cx) {
+      for (const b of bits) {
+        cx.fillStyle = b.color;
+        // Ширина «мигает» — бумажка будто переворачивается в полёте
+        const bw = Math.max(1, Math.round(Math.abs(Math.sin(b.phase)) * b.size));
+        cx.fillRect(Math.round(b.x), Math.round(b.y), bw, b.size);
+      }
+    },
+  };
+}
